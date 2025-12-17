@@ -1,0 +1,195 @@
+import { useEffect, useRef, useState } from 'react';
+import { WebSocketAdapter } from '@/infrastructure/websocket/WebSocketAdapter';
+import { useTelemetryStore } from '@/application/stores/telemetryStore';
+import { CSVExportService } from '@/application/services/CSVExportService';
+import { PDFReportService } from '@/application/services/PDFReportService';
+import { ConnectionControl } from '@/presentation/components/ConnectionControl';
+import { RelayControls } from '@/presentation/components/RelayControls';
+import { AnalogControls } from '@/presentation/components/AnalogControls';
+import { GaugePanel } from '@/presentation/components/GaugePanel';
+import { RealtimeCharts } from '@/presentation/components/RealtimeCharts';
+import { AlarmPanel } from '@/presentation/components/AlarmPanel';
+import { RecordingControls } from '@/presentation/components/RecordingControls';
+// import { CalibrationDialog } from '../components/CalibrationDialog';
+import { Badge } from '@/components/ui/badge';
+
+export default function Dashboard() {
+  const wsRef = useRef<WebSocketAdapter | null>(null);
+  const [relayStates, setRelayStates] = useState([false, false, false, false, false]);
+  const [analogValues, setAnalogValues] = useState([0, 0, 0, 0, 0]);
+
+  const {
+    connectionStatus,
+    currentData,
+    voltageHistory,
+    currentHistory,
+    rpmFlowHistory,
+    isRecording,
+    recordedData,
+    activeAlarms,
+    alarmHistory,
+    // calibration,
+    setConnectionStatus,
+    updateTelemetry,
+    startRecording,
+    stopRecording,
+    clearRecording,
+    acknowledgeAlarms,
+    // updateCalibration
+  } = useTelemetryStore();
+
+  useEffect(() => {
+    wsRef.current = new WebSocketAdapter({ url: 'ws://localhost:8080' });
+
+    wsRef.current.onStatusChange((status) => {
+      setConnectionStatus(status);
+    });
+
+    wsRef.current.onData((data) => {
+      updateTelemetry(data);
+    });
+
+    return () => {
+      wsRef.current?.disconnect();
+    };
+  }, [setConnectionStatus, updateTelemetry]);
+
+  const handleConnect = async () => {
+    try {
+      await wsRef.current?.connect();
+    } catch (error) {
+      console.error('Erro ao conectar:', error);
+    }
+  };
+
+  const handleDisconnect = () => {
+    wsRef.current?.disconnect();
+  };
+
+  const handleRelayToggle = (index: number) => {
+    const newStates = [...relayStates];
+    newStates[index] = !newStates[index];
+    setRelayStates(newStates);
+
+    wsRef.current?.send({
+      type: 'relay',
+      relay: { id: index, state: newStates[index] }
+    });
+  };
+
+  const handleAnalogChange = (index: number, value: number) => {
+    const newValues = [...analogValues];
+    newValues[index] = value;
+    setAnalogValues(newValues);
+
+    wsRef.current?.send({
+      type: 'analog',
+      analog: { id: index, value }
+    });
+  };
+
+  const handleExportCSV = () => {
+    CSVExportService.export(recordedData);
+  };
+
+  const handleGeneratePDF = () => {
+    PDFReportService.generate({
+      telemetry: recordedData,
+      alarms: alarmHistory
+    });
+  };
+
+  const isConnected = connectionStatus === 'connected';
+
+  return (
+    <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100">
+      {/* Header */}
+      <header className="bg-white border-b shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900">Supervisório SMAW-MIG/MAG</h1>
+              <p className="text-sm text-slate-600 mt-1">
+                Sistema de Monitoramento de Medição de Máquinas de Solda
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              {currentData && (
+                <Badge variant="outline" className="text-sm">
+                  Modo: {currentData.mode}
+                </Badge>
+              )}
+              {/* <CalibrationDialog
+                currentCalibration={calibration}
+                onApplyCalibration={updateCalibration}
+              /> */}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-6 py-6">
+        <div className="space-y-6">
+          {/* Connection and Alarms Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <ConnectionControl
+              status={connectionStatus}
+              onConnect={handleConnect}
+              onDisconnect={handleDisconnect}
+            />
+            <div className="lg:col-span-2">
+              <AlarmPanel
+                activeAlarms={activeAlarms}
+                alarmHistory={alarmHistory}
+                onAcknowledge={acknowledgeAlarms}
+              />
+            </div>
+          </div>
+
+          {/* Gauges */}
+          <GaugePanel data={currentData} />
+
+          {/* Controls Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <RelayControls
+              states={relayStates}
+              onToggle={handleRelayToggle}
+              disabled={!isConnected}
+            />
+            <AnalogControls
+              values={analogValues}
+              onChange={handleAnalogChange}
+              disabled={!isConnected}
+            />
+            <RecordingControls
+              isRecording={isRecording}
+              recordedCount={recordedData.length}
+              onStartRecording={startRecording}
+              onStopRecording={stopRecording}
+              onExportCSV={handleExportCSV}
+              onGeneratePDF={handleGeneratePDF}
+              onClearRecording={clearRecording}
+            />
+          </div>
+
+          {/* Charts */}
+          <RealtimeCharts
+            voltageData={voltageHistory}
+            currentData={currentHistory}
+            rpmFlowData={rpmFlowHistory}
+          />
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="bg-white border-t mt-12">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <p className="text-sm text-center text-slate-600">
+            Sistema Supervisório {new Date().getFullYear()}
+          </p>
+        </div>
+      </footer>
+    </div>
+  );
+}

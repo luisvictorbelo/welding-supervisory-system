@@ -10,8 +10,10 @@ import { GaugePanel } from '@/presentation/components/GaugePanel';
 import { RealtimeCharts } from '@/presentation/components/RealtimeCharts';
 import { AlarmPanel } from '@/presentation/components/AlarmPanel';
 import { RecordingControls } from '@/presentation/components/RecordingControls';
-// import { CalibrationDialog } from '../components/CalibrationDialog';
+// import { CalibrationDialog } from '@/presentation/components/CalibrationDialog';
+// import { PerformanceMonitor } from '@/presentation/components/PerformanceMonitor';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 export default function Dashboard() {
   const wsRef = useRef<WebSocketAdapter | null>(null);
@@ -108,9 +110,9 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-slate-900">Supervisório SMAW-MIG/MAG</h1>
+              <h1 className="text-3xl font-bold text-slate-900">Supervisório SCADA</h1>
               <p className="text-sm text-slate-600 mt-1">
-                Sistema de Monitoramento de Medição de Máquinas de Solda
+                Sistema de Monitoramento e Controle Industrial
               </p>
             </div>
             <div className="flex items-center gap-4">
@@ -119,6 +121,15 @@ export default function Dashboard() {
                   Modo: {currentData.mode}
                 </Badge>
               )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  useTelemetryStore.getState().forceCleanup();
+                }}
+              >
+                Limpar Histórico
+              </Button>
               {/* <CalibrationDialog
                 currentCalibration={calibration}
                 onApplyCalibration={updateCalibration}
@@ -186,7 +197,7 @@ export default function Dashboard() {
       <footer className="bg-white border-t mt-12">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <p className="text-sm text-center text-slate-600">
-            Sistema Supervisório {new Date().getFullYear()}
+            Sistema SCADA v1.0 | {new Date().getFullYear()}
           </p>
         </div>
       </footer>

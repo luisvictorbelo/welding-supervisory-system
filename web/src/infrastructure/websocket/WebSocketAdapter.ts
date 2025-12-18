@@ -12,7 +12,7 @@ interface WebSocketConfig {
 export class WebSocketAdapter {
   private ws: WebSocket | null = null;
   private config: Required<WebSocketConfig>;
-  private reconnectAttempts = 0;
+  // private reconnectAttempts = 0;
   private reconnectTimer: number | null = null;
   private statusCallback: ((status: ConnectionStatus) => void) | null = null;
   private dataCallback: ((data: Telemetry) => void) | null = null;
@@ -35,7 +35,7 @@ export class WebSocketAdapter {
 
         this.ws.onopen = () => {
           console.log('[WebSocket] Conectado');
-          this.reconnectAttempts = 0;
+          // this.reconnectAttempts = 0;
           this.updateStatus('connected');
           this.startCommCheck();
           resolve();
@@ -64,7 +64,7 @@ export class WebSocketAdapter {
           console.log('[WebSocket] Desconectado');
           this.updateStatus('disconnected');
           this.stopCommCheck();
-          this.attemptReconnect();
+          // this.attemptReconnect();
         };
 
       } catch (error) {
@@ -87,7 +87,7 @@ export class WebSocketAdapter {
       this.ws = null;
     }
 
-    this.reconnectAttempts = 0;
+    // this.reconnectAttempts = 0;
     this.updateStatus('disconnected');
   }
 
@@ -123,21 +123,21 @@ export class WebSocketAdapter {
     }
   }
 
-  private attemptReconnect(): void {
-    if (this.reconnectAttempts >= this.config.maxReconnectAttempts) {
-      console.error('[WebSocket] Máximo de tentativas de reconexão atingido');
-      return;
-    }
+  // private attemptReconnect(): void {
+  //   if (this.reconnectAttempts >= this.config.maxReconnectAttempts) {
+  //     console.error('[WebSocket] Máximo de tentativas de reconexão atingido');
+  //     return;
+  //   }
 
-    this.reconnectAttempts++;
-    console.log(`[WebSocket] Tentativa de reconexão ${this.reconnectAttempts}/${this.config.maxReconnectAttempts}`);
+  //   this.reconnectAttempts++;
+  //   console.log(`[WebSocket] Tentativa de reconexão ${this.reconnectAttempts}/${this.config.maxReconnectAttempts}`);
 
-    this.reconnectTimer = setTimeout(() => {
-      this.connect().catch(() => {
-        // Erro já tratado no connect()
-      });
-    }, this.config.reconnectInterval);
-  }
+  //   this.reconnectTimer = setTimeout(() => {
+  //     this.connect().catch(() => {
+  //       // Erro já tratado no connect()
+  //     });
+  //   }, this.config.reconnectInterval);
+  // }
 
   private startCommCheck(): void {
     this.lastMessageTime = Date.now();

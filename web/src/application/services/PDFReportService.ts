@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import type { Telemetry } from '@/domain/entities/Telemetry';
+import type { Telemetry } from '../../domain/entities/Telemetry';
 import { format } from 'date-fns';
 
 interface ReportData {

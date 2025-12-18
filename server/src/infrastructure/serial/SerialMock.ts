@@ -1,6 +1,6 @@
-import { Telemetry } from "../../domain/Telemetry.js";
+import { TelemetryMock } from "@/domain/TelemetryMock.js";
 
-type Callback = (data: Telemetry) => void
+type Callback = (data: TelemetryMock) => void
 
 export class SerialMock {
     private timer?: NodeJS.Timeout
@@ -13,7 +13,7 @@ export class SerialMock {
             const flow = 20 + Math.random() * 5
             const temperature = 60 + Math.random() * 20
 
-            const payload: Telemetry = {
+            const payload: TelemetryMock = {
                 voltage: {
                     avg: voltage,
                     rms: voltage * 1.02,

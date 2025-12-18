@@ -1,4 +1,4 @@
-export interface Telemetry {
+export interface TelemetryMock {
   voltage: {
     avg: number
     rms: number

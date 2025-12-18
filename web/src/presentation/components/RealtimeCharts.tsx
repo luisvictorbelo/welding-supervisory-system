@@ -47,7 +47,7 @@ export function RealtimeCharts({ voltageData, currentData, rpmFlowData }: Realti
             <LineChart data={voltageData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
               <XAxis 
-                dataKey="timestamp" 
+                dataKey="timreestamp" 
                 tickFormatter={formatTime}
                 stroke="#64748B"
                 style={{ fontSize: '12px' }}

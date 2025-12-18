@@ -10,7 +10,7 @@ interface TelemetryState {
   // Current data
   currentData: Telemetry | null;
   
-  // Historical data (para gráficos)
+  // Historical data (para gráficos) - LIMITADO
   voltageHistory: Array<{ timestamp: number; avg: number; rms: number; pk: number }>;
   currentHistory: Array<{ timestamp: number; avg: number; rms: number; pk: number }>;
   rpmFlowHistory: Array<{ timestamp: number; rpm: number; flow: number }>;
@@ -27,6 +27,9 @@ interface TelemetryState {
   activeAlarms: string[];
   alarmHistory: Array<{ type: string; timestamp: number; acknowledged: boolean }>;
   
+  // Performance tracking
+  lastCleanup: number;
+  
   // Actions
   setConnectionStatus: (status: 'disconnected' | 'connecting' | 'connected' | 'error') => void;
   updateTelemetry: (data: Telemetry) => void;
@@ -37,9 +40,14 @@ interface TelemetryState {
   updateCalibration: (calibration: Partial<CalibrationData>) => void;
   setCalibrating: (isCalibrating: boolean) => void;
   clearHistory: () => void;
+  forceCleanup: () => void;
 }
 
-const MAX_HISTORY_POINTS = 300; // 5 min a 1Hz
+// CONFIGURAÇÕES CRÍTICAS DE MEMÓRIA
+const MAX_HISTORY_POINTS = 300; // 5 min a 1Hz (antes era ilimitado!)
+const MAX_RECORDED_POINTS = 10000; // Limite de gravação (10k amostras)
+const MAX_ALARM_HISTORY = 50; // Máximo de alarmes no histórico
+const CLEANUP_INTERVAL = 60000; // Cleanup a cada 60s
 
 export const useTelemetryStore = create<TelemetryState>((set, get) => ({
   // Initial state
@@ -58,6 +66,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
   isCalibrating: false,
   activeAlarms: [],
   alarmHistory: [],
+  lastCleanup: Date.now(),
 
   // Actions
   setConnectionStatus: (status) => {
@@ -73,7 +82,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
     // Apply calibration
     const calibratedData = applyCalibration(data, state.calibration);
     
-    // Update histories
+    // Update histories com LIMITE RÍGIDO
     const newVoltageHistory = [
       ...state.voltageHistory,
       {
@@ -82,7 +91,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
         rms: calibratedData.voltage.rms,
         pk: calibratedData.voltage.pk
       }
-    ].slice(-MAX_HISTORY_POINTS);
+    ].slice(-MAX_HISTORY_POINTS); // CRÍTICO: Remove dados antigos
 
     const newCurrentHistory = [
       ...state.currentHistory,
@@ -105,7 +114,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
 
     // Check alarms
     const newAlarms: string[] = [];
-    const newAlarmHistory = [...state.alarmHistory];
+    let newAlarmHistory = [...state.alarmHistory];
 
     Object.entries(calibratedData.alarm).forEach(([key, value]) => {
       if (value) {
@@ -126,6 +135,28 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
       }
     });
 
+    // Limitar histórico de alarmes
+    newAlarmHistory = newAlarmHistory.slice(-MAX_ALARM_HISTORY);
+
+    // Recording com LIMITE
+    let newRecordedData = state.recordedData;
+    if (state.isRecording) {
+      if (newRecordedData.length < MAX_RECORDED_POINTS) {
+        newRecordedData = [...newRecordedData, calibratedData];
+      } else {
+        console.warn(`[Store] Limite de gravação atingido (${MAX_RECORDED_POINTS} amostras)`);
+      }
+    }
+
+    // Cleanup periódico forçado
+    const now = Date.now();
+    if (now - state.lastCleanup > CLEANUP_INTERVAL) {
+      console.log('[Store] Executando cleanup periódico');
+      newAlarmHistory = newAlarmHistory.filter(a => 
+        now - a.timestamp < 3600000 || !a.acknowledged // Mantém últimas 1h ou não-ACK
+      );
+    }
+
     set({
       currentData: calibratedData,
       voltageHistory: newVoltageHistory,
@@ -133,9 +164,8 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
       rpmFlowHistory: newRpmFlowHistory,
       activeAlarms: newAlarms,
       alarmHistory: newAlarmHistory,
-      recordedData: state.isRecording
-        ? [...state.recordedData, calibratedData]
-        : state.recordedData
+      recordedData: newRecordedData,
+      lastCleanup: now - state.lastCleanup > CLEANUP_INTERVAL ? now : state.lastCleanup
     });
   },
 
@@ -149,6 +179,10 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
 
   clearRecording: () => {
     set({ recordedData: [] });
+    // Force garbage collection hint
+    if (typeof globalThis !== 'undefined' && (globalThis as any).gc) {
+      (globalThis as any).gc();
+    }
   },
 
   acknowledgeAlarms: () => {
@@ -189,6 +223,26 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
       currentHistory: [],
       rpmFlowHistory: []
     });
+  },
+
+  forceCleanup: () => {
+    const state = get();
+    const now = Date.now();
+    
+    // Manter apenas últimos 2 minutos de dados
+    const twoMinutesAgo = now - 120000;
+    
+    set({
+      voltageHistory: state.voltageHistory.filter(d => d.timestamp > twoMinutesAgo),
+      currentHistory: state.currentHistory.filter(d => d.timestamp > twoMinutesAgo),
+      rpmFlowHistory: state.rpmFlowHistory.filter(d => d.timestamp > twoMinutesAgo),
+      alarmHistory: state.alarmHistory.filter(a => 
+        a.timestamp > twoMinutesAgo || !a.acknowledged
+      ),
+      lastCleanup: now
+    });
+
+    console.log('[Store] Cleanup forçado executado');
   }
 }));
 

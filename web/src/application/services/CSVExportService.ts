@@ -1,4 +1,4 @@
-import type { Telemetry } from '@/domain/entities/Telemetry';
+import type { Telemetry } from '../../domain/entities/Telemetry';
 import { format } from 'date-fns';
 
 export class CSVExportService {

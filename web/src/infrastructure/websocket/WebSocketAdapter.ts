@@ -16,6 +16,7 @@ export class WebSocketAdapter {
   private reconnectTimer: number | null = null;
   private statusCallback: ((status: ConnectionStatus) => void) | null = null;
   private dataCallback: ((data: Telemetry) => void) | null = null;
+  private messageHandler?: (event: MessageEvent) => void;
   private lastMessageTime = 0;
   private commCheckInterval: number | null = null;
 
@@ -27,68 +28,124 @@ export class WebSocketAdapter {
     };
   }
 
-  connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      try {
-        this.updateStatus('connecting');
-        this.ws = new WebSocket(this.config.url);
+  async connect(): Promise<void> {
+    // return new Promise((resolve, reject) => {
+    //   try {
+    //     this.updateStatus('connecting');
+    //     this.ws = new WebSocket(this.config.url);
 
-        this.ws.onopen = () => {
-          console.log('[WebSocket] Conectado');
-          // this.reconnectAttempts = 0;
-          this.updateStatus('connected');
-          this.startCommCheck();
-          resolve();
-        };
+    //     this.ws.onopen = () => {
+    //       console.log('[WebSocket] Conectado');
+    //       // this.reconnectAttempts = 0;
+    //       this.updateStatus('connected');
+    //       this.startCommCheck();
+    //       resolve();
+    //     };
 
-        this.ws.onmessage = (event) => {
-          try {
-            const data: Telemetry = JSON.parse(event.data);
-            this.lastMessageTime = Date.now();
+    //     this.ws.onmessage = (event) => {
+    //       try {
+    //         const data: Telemetry = JSON.parse(event.data);
+    //         this.lastMessageTime = Date.now();
             
-            if (this.dataCallback) {
-              this.dataCallback(data);
-            }
-          } catch (error) {
-            console.error('[WebSocket] Erro ao parsear mensagem:', error);
-          }
-        };
+    //         if (this.dataCallback) {
+    //           this.dataCallback(data);
+    //         }
+    //       } catch (error) {
+    //         console.error('[WebSocket] Erro ao parsear mensagem:', error);
+    //       }
+    //     };
 
-        this.ws.onerror = (error) => {
-          console.error('[WebSocket] Erro:', error);
-          this.updateStatus('error');
-          reject(error);
-        };
+    //     this.ws.onerror = (error) => {
+    //       console.error('[WebSocket] Erro:', error);
+    //       this.updateStatus('error');
+    //       reject(error);
+    //     };
 
-        this.ws.onclose = () => {
-          console.log('[WebSocket] Desconectado');
-          this.updateStatus('disconnected');
-          this.stopCommCheck();
-          // this.attemptReconnect();
-        };
+    //     this.ws.onclose = () => {
+    //       console.log('[WebSocket] Desconectado');
+    //       this.updateStatus('disconnected');
+    //       this.stopCommCheck();
+    //       // this.attemptReconnect();
+    //     };
 
+    //   } catch (error) {
+    //     this.updateStatus('error');
+    //     reject(error);
+    //   }
+    // });
+
+    console.log(this.ws);
+    if (this.ws) return;
+
+    this.updateStatus('connecting');
+
+    this.ws = new WebSocket(this.config.url);
+    console.log('[WS] connect');
+
+    this.messageHandler = (event: MessageEvent) => {
+      try {
+        const data: Telemetry = JSON.parse(event.data);
+        this.lastMessageTime = Date.now();
+        this.dataCallback?.(data);
+        // console.log('[WS] message handler attached');
       } catch (error) {
-        this.updateStatus('error');
-        reject(error);
+        console.error('[Websocket] Erro no parser:', error)
       }
-    });
+    };
+
+    this.ws.addEventListener('message', this.messageHandler);
+    console.log('[WS] message handler attached')
+
+    this.ws.onopen = () => {
+      console.log('[Websocket] Conectado');
+      this.updateStatus('connected');
+      this.startCommCheck;
+    };
+
+    this.ws.onerror = (error) => {
+      console.log('[WebSocket] Desconectado:', error);
+      this.updateStatus('disconnected');
+      this.stopCommCheck();
+      this.cleanupSocket();
+    };
   }
 
+  // disconnect(): void {
+  //   if (this.reconnectTimer) {
+  //     clearTimeout(this.reconnectTimer);
+  //     this.reconnectTimer = null;
+  //   }
+
+  //   this.stopCommCheck();
+
+  //   if (this.ws) {
+  //     this.ws.close();
+  //     this.ws = null;
+  //   }
+
+  //   // this.reconnectAttempts = 0;
+  //   this.updateStatus('disconnected');
+  // }
+
   disconnect(): void {
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-
     this.stopCommCheck();
+    this.cleanupSocket();
+    this.updateStatus('disconnected')
+    // this.dataCallback = null;
+    // this.statusCallback = null;
+    console.log('[WS] disconnect');
+  }
 
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
+  private cleanupSocket() {
+    if (!this.ws) return;
+
+    if (this.messageHandler) {
+      this.ws.removeEventListener('message', this.messageHandler);
     }
 
-    // this.reconnectAttempts = 0;
-    this.updateStatus('disconnected');
+    this.ws.close();
+    this.ws = null;
+    this.messageHandler = undefined;
   }
 
   send(message: CommandMessage): void {
@@ -104,6 +161,7 @@ export class WebSocketAdapter {
   }
 
   onData(callback: (data: Telemetry) => void): void {
+    console.log('[WS] Callback registrado');
     this.dataCallback = callback;
   }
 

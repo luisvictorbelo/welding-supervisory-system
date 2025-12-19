@@ -10,10 +10,10 @@ interface TelemetryState {
   // Current data
   currentData: Telemetry | null;
   
-  // Historical data (para gráficos) - LIMITADO
-  voltageHistory: Array<{ timestamp: number; avg: number; rms: number; pk: number }>;
-  currentHistory: Array<{ timestamp: number; avg: number; rms: number; pk: number }>;
-  rpmFlowHistory: Array<{ timestamp: number; rpm: number; flow: number }>;
+  // Historical data
+  // voltageHistory: Array<{ timestamp: number; avg: number; rms: number; pk: number }>;
+  // currentHistory: Array<{ timestamp: number; avg: number; rms: number; pk: number }>;
+  // rpmFlowHistory: Array<{ timestamp: number; rpm: number; flow: number }>;
   
   // Recording
   isRecording: boolean;
@@ -44,19 +44,22 @@ interface TelemetryState {
 }
 
 // CONFIGURAÇÕES CRÍTICAS DE MEMÓRIA
-const MAX_HISTORY_POINTS = 300; // 5 min a 1Hz (antes era ilimitado!)
-const MAX_RECORDED_POINTS = 10000; // Limite de gravação (10k amostras)
-const MAX_ALARM_HISTORY = 50; // Máximo de alarmes no histórico
-const CLEANUP_INTERVAL = 60000; // Cleanup a cada 60s
+// const MAX_HISTORY_POINTS = 300; 
+const MAX_RECORDED_POINTS = 10000;
+const MAX_ALARM_HISTORY = 50;
+const CLEANUP_INTERVAL = 60000;
+const STORE_FPS = 15;
+let last_update = 0;
+
 
 export const useTelemetryStore = create<TelemetryState>((set, get) => ({
   // Initial state
   isConnected: false,
   connectionStatus: 'disconnected',
   currentData: null,
-  voltageHistory: [],
-  currentHistory: [],
-  rpmFlowHistory: [],
+  // voltageHistory: [],
+  // currentHistory: [],
+  // rpmFlowHistory: [],
   isRecording: false,
   recordedData: [],
   calibration: {
@@ -77,40 +80,57 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
   },
 
   updateTelemetry: (data) => {
+    const timestampNow = performance.now();
+
+    if (timestampNow - last_update < 1000 / STORE_FPS) {
+      return;
+    }
+
+    last_update = timestampNow;
+
     const state = get();
     
     // Apply calibration
-    const calibratedData = applyCalibration(data, state.calibration);
+    // const calibratedData = applyCalibration(data, state.calibration);
+
+    const hasCalibration =
+      state.calibration.current.offset !== 0 ||
+      state.calibration.current.gain !== 1 ||
+      state.calibration.voltage.offset !== 0 ||
+      state.calibration.voltage.gain !== 1;
+
+    const calibratedData = hasCalibration
+      ? applyCalibration(data, state.calibration)
+      : data;
     
-    // Update histories com LIMITE RÍGIDO
-    const newVoltageHistory = [
-      ...state.voltageHistory,
-      {
-        timestamp: calibratedData.timestamp,
-        avg: calibratedData.voltage.avg,
-        rms: calibratedData.voltage.rms,
-        pk: calibratedData.voltage.pk
-      }
-    ].slice(-MAX_HISTORY_POINTS); // CRÍTICO: Remove dados antigos
+    // const newVoltageHistory = [
+    //   ...state.voltageHistory,
+    //   {
+    //     timestamp: calibratedData.timestamp,
+    //     avg: calibratedData.voltage.avg,
+    //     rms: calibratedData.voltage.rms,
+    //     pk: calibratedData.voltage.pk
+    //   }
+    // ].slice(-MAX_HISTORY_POINTS);
 
-    const newCurrentHistory = [
-      ...state.currentHistory,
-      {
-        timestamp: calibratedData.timestamp,
-        avg: calibratedData.current.avg,
-        rms: calibratedData.current.rms,
-        pk: calibratedData.current.pk
-      }
-    ].slice(-MAX_HISTORY_POINTS);
+    // const newCurrentHistory = [
+    //   ...state.currentHistory,
+    //   {
+    //     timestamp: calibratedData.timestamp,
+    //     avg: calibratedData.current.avg,
+    //     rms: calibratedData.current.rms,
+    //     pk: calibratedData.current.pk
+    //   }
+    // ].slice(-MAX_HISTORY_POINTS);
 
-    const newRpmFlowHistory = [
-      ...state.rpmFlowHistory,
-      {
-        timestamp: calibratedData.timestamp,
-        rpm: calibratedData.rpm,
-        flow: calibratedData.flow
-      }
-    ].slice(-MAX_HISTORY_POINTS);
+    // const newRpmFlowHistory = [
+    //   ...state.rpmFlowHistory,
+    //   {
+    //     timestamp: calibratedData.timestamp,
+    //     rpm: calibratedData.rpm,
+    //     flow: calibratedData.flow
+    //   }
+    // ].slice(-MAX_HISTORY_POINTS);
 
     // Check alarms
     const newAlarms: string[] = [];
@@ -135,10 +155,10 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
       }
     });
 
-    // Limitar histórico de alarmes
+    
     newAlarmHistory = newAlarmHistory.slice(-MAX_ALARM_HISTORY);
 
-    // Recording com LIMITE
+    
     let newRecordedData = state.recordedData;
     if (state.isRecording) {
       if (newRecordedData.length < MAX_RECORDED_POINTS) {
@@ -159,14 +179,16 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
 
     set({
       currentData: calibratedData,
-      voltageHistory: newVoltageHistory,
-      currentHistory: newCurrentHistory,
-      rpmFlowHistory: newRpmFlowHistory,
+      // voltageHistory: newVoltageHistory,
+      // currentHistory: newCurrentHistory,
+      // rpmFlowHistory: newRpmFlowHistory,
       activeAlarms: newAlarms,
       alarmHistory: newAlarmHistory,
       recordedData: newRecordedData,
       lastCleanup: now - state.lastCleanup > CLEANUP_INTERVAL ? now : state.lastCleanup
     });
+
+    // console.log()
   },
 
   startRecording: () => {
@@ -219,9 +241,10 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
 
   clearHistory: () => {
     set({
-      voltageHistory: [],
-      currentHistory: [],
-      rpmFlowHistory: []
+      // currentData: []
+      // voltageHistory: [],
+      // currentHistory: [],
+      // rpmFlowHistory: []
     });
   },
 
@@ -230,12 +253,12 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
     const now = Date.now();
     
     // Manter apenas últimos 2 minutos de dados
-    const twoMinutesAgo = now - 120000;
+    const twoMinutesAgo = now - 60000;
     
     set({
-      voltageHistory: state.voltageHistory.filter(d => d.timestamp > twoMinutesAgo),
-      currentHistory: state.currentHistory.filter(d => d.timestamp > twoMinutesAgo),
-      rpmFlowHistory: state.rpmFlowHistory.filter(d => d.timestamp > twoMinutesAgo),
+      // voltageHistory: state.voltageHistory.filter(d => d.timestamp > twoMinutesAgo),
+      // currentHistory: state.currentHistory.filter(d => d.timestamp > twoMinutesAgo),
+      // rpmFlowHistory: state.rpmFlowHistory.filter(d => d.timestamp > twoMinutesAgo),
       alarmHistory: state.alarmHistory.filter(a => 
         a.timestamp > twoMinutesAgo || !a.acknowledged
       ),

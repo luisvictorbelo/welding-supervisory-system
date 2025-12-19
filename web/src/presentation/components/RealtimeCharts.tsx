@@ -2,6 +2,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { format } from 'date-fns';
+import React from 'react';
 
 // interface ChartDataPoint {
 //   timestamp: number;
@@ -14,7 +15,7 @@ interface RealtimeChartsProps {
   rpmFlowData: Array<{ timestamp: number; rpm: number; flow: number }>;
 }
 
-export function RealtimeCharts({ voltageData, currentData, rpmFlowData }: RealtimeChartsProps) {
+export const RealtimeCharts = React.memo(function RealtimeCharts({ voltageData, currentData, rpmFlowData }: RealtimeChartsProps) {
   const formatTime = (timestamp: number) => {
     return format(new Date(timestamp), 'HH:mm:ss');
   };
@@ -46,42 +47,42 @@ export function RealtimeCharts({ voltageData, currentData, rpmFlowData }: Realti
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={voltageData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-              <XAxis 
-                dataKey="timreestamp" 
+              <XAxis
+                dataKey="timestamp"
                 tickFormatter={formatTime}
                 stroke="#64748B"
                 style={{ fontSize: '12px' }}
               />
-              <YAxis 
+              <YAxis
                 stroke="#64748B"
                 style={{ fontSize: '12px' }}
                 label={{ value: 'Tensão (V)', angle: -90, position: 'insideLeft' }}
               />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
-              <Line 
-                type="monotone" 
-                dataKey="avg" 
-                stroke="#3B82F6" 
-                name="Média" 
+              <Line
+                type="monotone"
+                dataKey="avg"
+                stroke="#3B82F6"
+                name="Média"
                 dot={false}
                 strokeWidth={2}
                 isAnimationActive={false}
               />
-              <Line 
-                type="monotone" 
-                dataKey="rms" 
-                stroke="#10B981" 
-                name="RMS" 
+              <Line
+                type="monotone"
+                dataKey="rms"
+                stroke="#10B981"
+                name="RMS"
                 dot={false}
                 strokeWidth={2}
                 isAnimationActive={false}
               />
-              <Line 
-                type="monotone" 
-                dataKey="pk" 
-                stroke="#EF4444" 
-                name="Pico" 
+              <Line
+                type="monotone"
+                dataKey="pk"
+                stroke="#EF4444"
+                name="Pico"
                 dot={false}
                 strokeWidth={2}
                 isAnimationActive={false}
@@ -200,5 +201,5 @@ export function RealtimeCharts({ voltageData, currentData, rpmFlowData }: Realti
         </CardContent>
       </Card>
     </div>
-  );
-}
+  )
+});

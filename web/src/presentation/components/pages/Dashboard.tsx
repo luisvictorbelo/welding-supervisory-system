@@ -15,24 +15,42 @@ import { RecordingControls } from '@/presentation/components/RecordingControls';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
+const MAX_POINTS = 10;
+
 export default function Dashboard() {
   const wsRef = useRef<WebSocketAdapter | null>(null);
   const [relayStates, setRelayStates] = useState([false, false, false, false, false]);
   const [analogValues, setAnalogValues] = useState([0, 0, 0, 0, 0]);
 
+  const voltageBufferRef = useRef<
+  Array<{ timestamp: number; avg: number; rms: number; pk: number }>
+  >([]);
+
+  const eletricCurrentBufferRef = useRef<
+  Array<{ timestamp: number; avg: number; rms: number; pk: number }>
+  >([]);
+
+  const rpmBufferRef = useRef<
+  Array<{ timestamp: number; rpm: number; flow: number }>
+  >([]);
+
+  const [voltageData, setVoltageData] = useState<typeof voltageBufferRef.current>([]);
+  const [eletricCurrentData, setEletricCurrentData] = useState<typeof eletricCurrentBufferRef.current>([]);
+  const [rpmData, setRpmData] = useState<typeof rpmBufferRef.current>([]);
+
   const {
     connectionStatus,
-    currentData,
-    voltageHistory,
-    currentHistory,
-    rpmFlowHistory,
+    // currentData,
+    // voltageHistory,
+    // currentHistory,
+    // rpmFlowHistory,
     isRecording,
     recordedData,
     activeAlarms,
     alarmHistory,
     // calibration,
-    setConnectionStatus,
-    updateTelemetry,
+    // setConnectionStatus,
+    // updateTelemetry,
     startRecording,
     stopRecording,
     clearRecording,
@@ -40,21 +58,66 @@ export default function Dashboard() {
     // updateCalibration
   } = useTelemetryStore();
 
+  const updateTelemetry = useTelemetryStore(s => s.updateTelemetry);
+  const setConnectionStatus = useTelemetryStore(s => s.setConnectionStatus);
+  const currentData = useTelemetryStore(s => s.currentData);
+
   useEffect(() => {
-    wsRef.current = new WebSocketAdapter({ url: 'ws://localhost:8080' });
+    const ws = new WebSocketAdapter({ url: 'ws://localhost:8080' });
 
-    wsRef.current.onStatusChange((status) => {
-      setConnectionStatus(status);
-    });
+    wsRef.current = ws
 
-    wsRef.current.onData((data) => {
-      updateTelemetry(data);
-    });
+    ws.onStatusChange(setConnectionStatus);
+
+    ws.onData(updateTelemetry);
+
+    ws.connect();
 
     return () => {
-      wsRef.current?.disconnect();
+      ws.disconnect();
+      wsRef.current = null;
     };
-  }, [setConnectionStatus, updateTelemetry]);
+  }, []);
+
+  useEffect(() => {
+    if (!currentData) return
+
+    voltageBufferRef.current.push({
+      timestamp: currentData.timestamp,
+      avg: currentData.voltage.avg,
+      rms: currentData.voltage.rms,
+      pk: currentData.voltage.pk,
+    });
+
+    eletricCurrentBufferRef.current.push({
+      timestamp: currentData.timestamp,
+      avg: currentData.current.avg,
+      rms: currentData.current.rms,
+      pk: currentData.current.pk,
+    });
+
+    rpmBufferRef.current.push({
+      timestamp: currentData.timestamp,
+      rpm: currentData.rpm,
+      flow: currentData.flow,
+    });
+    
+    if (eletricCurrentBufferRef.current.length > MAX_POINTS) {
+      eletricCurrentBufferRef.current.shift();
+    }
+
+    if (voltageBufferRef.current.length > MAX_POINTS) {
+      voltageBufferRef.current.shift();
+    }
+
+    if (rpmBufferRef.current.length > MAX_POINTS) {
+      rpmBufferRef.current.shift();
+    }
+
+    setVoltageData([...voltageBufferRef.current]);
+    setEletricCurrentData([...eletricCurrentBufferRef.current]);
+    setRpmData([...rpmBufferRef.current]);
+  }, [currentData]);
 
   const handleConnect = async () => {
     try {
@@ -186,9 +249,9 @@ export default function Dashboard() {
 
           {/* Charts */}
           <RealtimeCharts
-            voltageData={voltageHistory}
-            currentData={currentHistory}
-            rpmFlowData={rpmFlowHistory}
+            voltageData={voltageData}
+            currentData={eletricCurrentData}
+            rpmFlowData={rpmData}
           />
         </div>
       </main>
